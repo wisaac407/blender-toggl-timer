@@ -1,3 +1,7 @@
+import concurrent
+import gc
+import sys
+import asyncio
 import bpy
 
 bl_info = {
@@ -11,6 +15,90 @@ bl_info = {
     "wiki_url": "",
     "category": "Productivity",
 }
+
+
+class EventLoop:
+    """Main event loop"""
+
+    _loop = None
+    _operator = None
+    _stop_next_step = None
+
+    def start(self, operator: bpy.types.Operator):
+        # Store a copy of our own event loop rather than use asyncio.get_event_loop so we
+        # aren't fighting with other addons that use asyncio (e.g. the Blender Cloud addon)
+        if sys.platform == 'win32':
+            # On Windows, the default event loop is SelectorEventLoop, which does
+            # not support subprocesses. ProactorEventLoop should be used instead.
+            # Source: https://docs.python.org/3/library/asyncio-subprocess.html
+            self._loop = asyncio.ProactorEventLoop()
+        else:
+            self._loop = asyncio.new_event_loop()
+
+            # Prevent subprocesses from hanging: https://github.com/python/asyncio/issues/478
+            asyncio.get_child_watcher().attach_loop(self._loop)
+
+        self._operator = operator
+
+        # Needed to run HTTP requests
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+        self._loop.set_default_executor(executor)
+
+        def handle_exception(loop, context):
+            exc = context.get('exception')
+            # Most places that raise an error will take care of reporting the error,
+            # so for now just log it out and close the event loop.
+            import traceback
+            traceback.print_tb(exc.__traceback__)
+            self.report({'ERROR'}, 'Stopping because of error: {}: {}'.format(type(exc).__name__, exc))
+
+            # We can't actually stop here, we have to wait until the next step
+            self._stop_next_step = True
+
+        self._loop.set_exception_handler(handle_exception)
+
+    def get_loop(self) -> asyncio.AbstractEventLoop:
+        """Return the asyncio event loop"""
+        return self._loop
+
+    def step(self):
+        """Execute single step of the event loop"""
+        self._loop.call_soon(self._loop.stop)
+        self._loop.run_forever()
+
+        if self._stop_next_step:
+            self._stop_next_step = False
+            self.stop()
+
+    def stop(self):
+        """Stop the event loop"""
+        logger.debug('Stopping event loop')
+        self._loop.close()
+        self._loop = None
+        self._operator = None
+
+        # TODO: Check that this is needed (maybe check that it returns non-zero?)
+        gc.collect()
+
+    def dispatch(self, action):
+        """Add 'action' to the event loop"""
+        if self.running:
+            asyncio.ensure_future(action, loop=self._loop)
+
+    def report(self, *args, **kwargs):
+        """Pass through for the modal report function"""
+        if self._operator:
+            self._operator.report(*args, **kwargs)
+
+    @property
+    def running(self) -> bool:
+        """True if the event loop is currently running"""
+        return self._loop is not None and not self._loop.is_closed()
+
+
+class Manager:
+    pass
+
 
 classes = ()
 
