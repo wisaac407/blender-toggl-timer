@@ -1,3 +1,15 @@
+bl_info = {
+    "name": "Toggl Timer",
+    "author": "Isaac Weaver",
+    "version": (0, 0, 1),
+    "blender": (2, 80, 0),
+    "location": "Properties > Scene > Timer",
+    "description": "Integrate Toggl timer into Blender",
+    "warning": "For demonstration only",
+    "wiki_url": "",
+    "category": "Productivity",
+}
+
 import bpy
 
 classes = ()
@@ -114,7 +126,7 @@ class TIMER_UL_tasks(bpy.types.UIList):
 @register_class
 class Timer(bpy.types.Panel):
     """Creates a Panel in the scene context of the properties editor"""
-    bl_label = "Layout Demo"
+    bl_label = "Toggl Timer"
     bl_idname = "SCENE_PT_layout"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
