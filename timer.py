@@ -1,3 +1,5 @@
+import bpy
+
 bl_info = {
     "name": "Toggl Timer",
     "author": "Isaac Weaver",
@@ -9,8 +11,6 @@ bl_info = {
     "wiki_url": "",
     "category": "Productivity",
 }
-
-import bpy
 
 classes = ()
 
